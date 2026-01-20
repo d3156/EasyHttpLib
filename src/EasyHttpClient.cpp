@@ -1,5 +1,6 @@
 #include "EasyHttpClient.hpp"
 
+#include <boost/beast/http/impl/write.hpp>
 #include <boost/beast/version.hpp>
 #include <iostream>
 
@@ -60,7 +61,8 @@ namespace d3156
             LOG("Closed SSL session");
     }
 
-    http::response<http::dynamic_body> EasyHttpClient::send(http::request<http::string_body> req)
+    http::response<http::dynamic_body> EasyHttpClient::send(http::request<http::string_body> req,
+                                                            std::chrono::milliseconds timeout)
     {
         try {
             // Construct request
@@ -70,6 +72,8 @@ namespace d3156
             if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
             if (cookie_.size()) req.set(http::field::cookie, cookie_);
             req.prepare_payload();
+            beast::tcp_stream &tcp_layer = stream_->next_layer();
+            tcp_layer.expires_after(timeout);
             http::write(*stream_, req);
 
             // Receive the response
@@ -84,4 +88,35 @@ namespace d3156
         }
         return {};
     }
+
+    http::response<http::dynamic_body> EasyHttpClient::send(std::string target, std::string body, http::verb type,
+                                                            std::chrono::milliseconds timeout)
+    {
+        boost::beast::http::request<boost::beast::http::string_body> req{type, target, 11};
+        req.body() = body;
+        req.set(http::field::host, host_);
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+        req.set(http::field::content_type, "text/plain; charset=utf-8");
+        if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
+        if (cookie_.size()) req.set(http::field::cookie, cookie_);
+        try {
+            // Construct request
+            req.prepare_payload();
+            beast::tcp_stream &tcp_layer = stream_->next_layer();
+            tcp_layer.expires_after(timeout);
+            http::write(*stream_, req);
+
+            // Receive the response
+            beast::flat_buffer buffer;
+            http::response<http::dynamic_body> res;
+            http::read(*stream_, buffer, res);
+            return res;
+        } catch (const std::exception &e) {
+            LOG("Request to " << req.target() << " failed.");
+            LOG("Request error: " << e.what());
+            reconnect();
+        }
+        return {};
+    }
+
 }
