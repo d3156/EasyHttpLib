@@ -28,10 +28,10 @@ find_package(Boost 1.75 REQUIRED COMPONENTS system thread)
 target_include_directories(EasyHttpLib PRIVATE
   ${Boost_INCLUDE_DIRS}
 )
+
 target_link_libraries(EasyHttpLib PRIVATE
   Boost::system
   Boost::thread
-  Boost::json
   OpenSSL::SSL
   OpenSSL::Crypto
 )
