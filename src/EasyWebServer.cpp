@@ -11,6 +11,7 @@ namespace d3156
 
     void EasyWebServer::accept()
     {
+        if (!is_running_) return;
         auto socket = std::make_shared<tcp::socket>(io_);
         acceptor_.async_accept(*socket, [this, socket](beast::error_code ec) {
             if (!ec) handle_connection(socket);
@@ -54,4 +55,21 @@ namespace d3156
     }
 
     void EasyWebServer::addPath(std::string path, RequestHandler handler) { handlers_[path] = handler; }
+
+    void EasyWebServer::stop()
+    {
+        is_running_ = false;
+
+        // Отменяем все ожидающие операции
+        beast::error_code ec;
+        acceptor_.cancel(ec);
+        acceptor_.close(ec);
+
+        handlers_.clear();
+    }
+
+    EasyWebServer::~EasyWebServer()
+    {
+        if (is_running_) stop();
+    }
 }

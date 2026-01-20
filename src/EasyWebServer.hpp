@@ -18,11 +18,14 @@ namespace d3156
     public:
         using RequestHandler = std::function<std::pair<bool, std::string>(const http::request<http::string_body> &,
                                                                           const address &client_ip)>;
+        ~EasyWebServer();
 
         EasyWebServer(asio::io_context &io, unsigned short port);
 
         /// Добавить обработчик запросов по заданному пути
         void addPath(std::string path, RequestHandler handler);
+
+        void stop();
 
     private:
         void accept();
@@ -35,5 +38,6 @@ namespace d3156
         std::unordered_map<std::string, RequestHandler> handlers_;
         asio::io_context &io_;
         tcp::acceptor acceptor_;
+        std::atomic<bool> is_running_ = true;
     };
 }
