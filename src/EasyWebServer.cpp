@@ -40,8 +40,8 @@ namespace d3156
         auto response = std::make_shared<http::response<http::string_body>>(
             res.first ? http::status::ok : http::status::forbidden, req.version());
         if (!res.first) std::cout << "[WebhookServer] Bad Request " << req << "\n\n[WebhookServer] What:" << res.second;
-        // response->set(http::field::content_type, "text/plain");
-        response->set(http::field::content_type, "text/html; charset=utf-8");
+        response->set(http::field::content_type, "text/plain");
+        // response->set(http::field::content_type, "text/html; charset=utf-8");
         response->body() = res.first ? res.second : "Bad Request";
         response->prepare_payload();
         response->keep_alive(false);
@@ -62,8 +62,8 @@ namespace d3156
 
         // Отменяем все ожидающие операции
         beast::error_code ec;
-        acceptor_.cancel(ec);
-        acceptor_.close(ec);
+        ec = acceptor_.cancel(ec);
+        ec = acceptor_.close(ec);
 
         handlers_.clear();
     }
