@@ -34,5 +34,6 @@ namespace d3156
         asio::ssl::context ssl_ctx_;
         std::string host_ = "";
         asio::io_context &io_;
+        bool runing = true;
     };
 }

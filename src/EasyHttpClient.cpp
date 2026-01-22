@@ -2,6 +2,7 @@
 
 #include <boost/beast/http/impl/write.hpp>
 #include <boost/beast/version.hpp>
+#include <exception>
 #include <iostream>
 
 namespace d3156
@@ -24,6 +25,7 @@ namespace d3156
 
     bool EasyHttpClient::reconnect()
     {
+        if (!runing) return false;
         if (stream_) {
             LOG("Reconnecting SSL session");
             beast::error_code ec;
@@ -31,14 +33,17 @@ namespace d3156
             stream_.reset();
             if (ec != net::error::eof && ec) { LOG("On close error: " << ec.to_string()); }
         }
-        // Создаем новое соединение
-        stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(io_, ssl_ctx_);
-        stream_->set_verify_mode(ssl::verify_none);
-        // TCP подключение
-        tcp::resolver resolver(io_);
-
-        get_lowest_layer(*stream_).connect(resolver.resolve({host_, "https"}));
-        get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
+        try {
+            stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(io_, ssl_ctx_);
+            stream_->set_verify_mode(ssl::verify_none);
+            tcp::resolver resolver(io_);
+            get_lowest_layer(*stream_).connect(
+                resolver.resolve({host_, host_.find("https") != std::string::npos ? "https" : "http"}));
+            get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
+        } catch (std::exception &e) {
+            LOG("Error: " << e.what());
+            return false;
+        }
 
         if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_.c_str())) {
             beast::system_error er{
@@ -53,6 +58,7 @@ namespace d3156
 
     EasyHttpClient::~EasyHttpClient()
     {
+        runing = false;
         beast::error_code ec;
         stream_->shutdown(ec);
         if (ec != net::error::eof)
