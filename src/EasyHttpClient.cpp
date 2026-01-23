@@ -23,43 +23,64 @@ namespace d3156
     {
         ssl_ctx_.set_default_verify_paths();
         host_clean_ = host;
+        service     = "443";
         if (host_clean_.find("https://") == 0)
             host_clean_ = host_clean_.substr(8);
-        else if (host_clean_.find("http://") == 0)
+        else if (host_clean_.find("http://") == 0) {
             host_clean_ = host_clean_.substr(7);
-        service = host.find("https") != std::string::npos ? "443" : "80";
+            service     = "80";
+            use_ssl_    = false;
+        }
+        auto pos = host_clean_.find(":");
+        if (pos != std::string::npos) {
+            service     = host_clean_.substr(pos + 1);
+            host_clean_ = host_clean_.substr(0, pos);
+        }
         reconnect();
     }
 
     bool EasyHttpClient::reconnect()
     {
         if (!runing) return false;
-        if (stream_) {
-            LOG("Reconnecting SSL session");
-            beast::error_code ec;
-            stream_->shutdown(ec); // Игнорируем ошибки
-            stream_.reset();
-            if (ec != net::error::eof && ec) { LOG("On close error: " << ec.to_string()); }
-        }
-        try {
-            stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(io_, ssl_ctx_);
-            stream_->set_verify_mode(ssl::verify_peer);
-            tcp::resolver resolver(io_);
-            get_lowest_layer(*stream_).connect(resolver.resolve({host_clean_, service}));
-            get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
-            if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_clean_.c_str())) {
-                beast::system_error er{
-                    beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category())};
-                LOG("SSL_set_tlsext_host_name error: " << er.what());
+        if (use_ssl_) {
+            if (stream_) {
+                LOG("Reconnecting SSL session");
+                beast::error_code ec;
+                stream_.reset();
+                if (ec != net::error::eof && ec) { LOG("On close error: " << ec.to_string()); }
+            }
+            try {
+                stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(io_, ssl_ctx_);
+                stream_->set_verify_mode(ssl::verify_peer);
+                tcp::resolver resolver(io_);
+                get_lowest_layer(*stream_).connect(resolver.resolve({host_clean_, service}));
+                get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
+                if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_clean_.c_str())) {
+                    beast::system_error er{
+                        beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category())};
+                    LOG("SSL_set_tlsext_host_name error: " << er.what());
+                    return false;
+                }
+                stream_->handshake(ssl::stream_base::client);
+                LOG("Сonnected with new SSL session");
+            } catch (std::exception &e) {
+                LOG("Error: " << e.what() << " with service " << service << " to host " << host_clean_);
                 return false;
             }
-            stream_->handshake(ssl::stream_base::client);
-            LOG("Сonnected with new SSL session");
+
+            return true;
+        }
+        try {
+            tcp_stream_.reset();
+            tcp_stream_ = std::make_unique<beast::tcp_stream>(io_);
+            tcp::resolver resolver(io_);
+            tcp_stream_->connect(resolver.resolve(host_clean_, service));
+            tcp_stream_->expires_after(std::chrono::seconds(30));
+            LOG("Connected HTTP");
         } catch (std::exception &e) {
             LOG("Error: " << e.what() << " with service " << service << " to host " << host_clean_);
             return false;
         }
-
         return true;
     }
 
@@ -67,11 +88,11 @@ namespace d3156
     {
         runing = false;
         beast::error_code ec;
-        stream_->shutdown(ec);
+        if (stream_) stream_->shutdown(ec);
         if (ec != net::error::eof)
-            LOG("SSL_set_tlsext_host_name error: " << ec.to_string());
+            LOG("Close socket error: " << ec.to_string());
         else
-            LOG("Closed SSL session");
+            LOG("Closed session");
     }
 
     http::response<http::dynamic_body> EasyHttpClient::send(http::request<http::string_body> req,
@@ -85,14 +106,22 @@ namespace d3156
             if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
             if (cookie_.size()) req.set(http::field::cookie, cookie_);
             req.prepare_payload();
-            beast::tcp_stream &tcp_layer = stream_->next_layer();
-            tcp_layer.expires_after(timeout);
-            http::write(*stream_, req);
+
+            if (use_ssl_) {
+                stream_->next_layer().expires_after(timeout);
+                http::write(*stream_, req);
+            } else {
+                tcp_stream_->expires_after(timeout);
+                http::write(*tcp_stream_, req);
+            }
 
             // Receive the response
             beast::flat_buffer buffer;
             http::response<http::dynamic_body> res;
-            http::read(*stream_, buffer, res);
+            if (use_ssl_)
+                http::read(*stream_, buffer, res);
+            else
+                http::read(*tcp_stream_, buffer, res);
             return res;
         } catch (const std::exception &e) {
             LOG("Request to " << req.target() << " failed.");
@@ -115,14 +144,21 @@ namespace d3156
         try {
             // Construct request
             req.prepare_payload();
-            beast::tcp_stream &tcp_layer = stream_->next_layer();
-            tcp_layer.expires_after(timeout);
-            http::write(*stream_, req);
+            if (use_ssl_) {
+                stream_->next_layer().expires_after(timeout);
+                http::write(*stream_, req);
+            } else {
+                tcp_stream_->expires_after(timeout);
+                http::write(*tcp_stream_, req);
+            }
 
             // Receive the response
             beast::flat_buffer buffer;
             http::response<http::dynamic_body> res;
-            http::read(*stream_, buffer, res);
+            if (use_ssl_)
+                http::read(*stream_, buffer, res);
+            else
+                http::read(*tcp_stream_, buffer, res);
             return res;
         } catch (const std::exception &e) {
             LOG("Request to " << req.target() << " failed.");
@@ -147,5 +183,6 @@ namespace d3156
     }
 
     void EasyHttpClient::setBasePath(std::string basePath) { basePath_ = basePath; }
+
     void EasyHttpClient::setContentType(std::string payload) { payload_type = payload; }
 }

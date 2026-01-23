@@ -38,14 +38,16 @@ namespace d3156
         ~EasyHttpClient();
 
     private:
+        bool use_ssl_            = true;
         std::string payload_type = "text/plain; charset=utf-8";
         bool reconnect();
         std::string token_;
         std::string cookie_;
         std::unique_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
+        std::unique_ptr<beast::tcp_stream> tcp_stream_;
         asio::ssl::context ssl_ctx_;
         std::string host_clean_ = "";
-        std::string service = "";
+        std::string service     = "";
         asio::io_context &io_;
         bool runing = true;
         std::string basePath_;
