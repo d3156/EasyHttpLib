@@ -87,7 +87,6 @@ namespace d3156
             req.prepare_payload();
             beast::tcp_stream &tcp_layer = stream_->next_layer();
             tcp_layer.expires_after(timeout);
-            std::cout << "send: " << req;
             http::write(*stream_, req);
 
             // Receive the response
