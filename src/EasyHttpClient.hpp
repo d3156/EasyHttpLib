@@ -44,7 +44,8 @@ namespace d3156
         std::string cookie_;
         std::unique_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
         asio::ssl::context ssl_ctx_;
-        std::string host_ = "";
+        std::string host_clean_ = "";
+        std::string service = "";
         asio::io_context &io_;
         bool runing = true;
         std::string basePath_;

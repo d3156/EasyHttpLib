@@ -5,7 +5,7 @@
 #include <exception>
 #include <iostream>
 #include <string>
-#define LOG(args) std::cout << "[EasyHttpClient " << host_ << "] " << args << std::endl
+#define LOG(args) std::cout << "[EasyHttpClient " << host_clean_ << "] " << args << std::endl
 
 namespace d3156
 {
@@ -19,9 +19,15 @@ namespace d3156
 
     EasyHttpClient::EasyHttpClient(net::io_context &ioc, const std::string &host, const std::string &cookie,
                                    const std::string &token)
-        : token_(token), cookie_(cookie), host_(host), io_(ioc), ssl_ctx_(ssl::context::tlsv13_client)
+        : token_(token), cookie_(cookie), io_(ioc), ssl_ctx_(ssl::context::tlsv13_client)
     {
         ssl_ctx_.set_default_verify_paths();
+        host_clean_ = host;
+        if (host_clean_.find("https://") == 0)
+            host_clean_ = host_clean_.substr(8);
+        else if (host_clean_.find("http://") == 0)
+            host_clean_ = host_clean_.substr(7);
+        service = host.find("https") != std::string::npos ? "https" : "http";
         reconnect();
     }
 
@@ -35,19 +41,13 @@ namespace d3156
             stream_.reset();
             if (ec != net::error::eof && ec) { LOG("On close error: " << ec.to_string()); }
         }
-        std::string service    = host_.find("https") != std::string::npos ? "https" : "http";
-        std::string host_clean = host_;
-        if (host_clean.find("https://") == 0)
-            host_clean = host_clean.substr(8);
-        else if (host_clean.find("http://") == 0)
-            host_clean = host_clean.substr(7);
         try {
             stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(io_, ssl_ctx_);
             stream_->set_verify_mode(ssl::verify_peer);
             tcp::resolver resolver(io_);
-            get_lowest_layer(*stream_).connect(resolver.resolve({host_clean, service}));
+            get_lowest_layer(*stream_).connect(resolver.resolve({host_clean_, service}));
             get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
-            if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_clean.c_str())) {
+            if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_clean_.c_str())) {
                 beast::system_error er{
                     beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category())};
                 LOG("SSL_set_tlsext_host_name error: " << er.what());
@@ -56,7 +56,7 @@ namespace d3156
             stream_->handshake(ssl::stream_base::client);
             LOG("Сonnected with new SSL session");
         } catch (std::exception &e) {
-            LOG("Error: " << e.what() << " with service " << service << " to host " << host_clean);
+            LOG("Error: " << e.what() << " with service " << service << " to host " << host_clean_);
             return false;
         }
 
@@ -79,14 +79,15 @@ namespace d3156
     {
         try {
             // Construct request
-            req.set(http::field::host, host_);
+            req.set(http::field::host, host_clean_);
             req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-            req.set(http::field::content_type, "application/json");
+            req.set(http::field::content_type, payload_type);
             if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
             if (cookie_.size()) req.set(http::field::cookie, cookie_);
             req.prepare_payload();
             beast::tcp_stream &tcp_layer = stream_->next_layer();
             tcp_layer.expires_after(timeout);
+            std::cout << "send: " << req;
             http::write(*stream_, req);
 
             // Receive the response
@@ -107,7 +108,7 @@ namespace d3156
     {
         boost::beast::http::request<boost::beast::http::string_body> req{type, basePath_ + target, 11};
         req.body() = body;
-        req.set(http::field::host, host_);
+        req.set(http::field::host, host_clean_);
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.set(http::field::content_type, payload_type);
         if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
