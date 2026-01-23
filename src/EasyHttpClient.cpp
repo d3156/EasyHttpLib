@@ -27,7 +27,7 @@ namespace d3156
             host_clean_ = host_clean_.substr(8);
         else if (host_clean_.find("http://") == 0)
             host_clean_ = host_clean_.substr(7);
-        service = host.find("https") != std::string::npos ? "https" : "http";
+        service = host.find("https") != std::string::npos ? "443" : "80";
         reconnect();
     }
 
