@@ -109,7 +109,7 @@ namespace d3156
         req.body() = body;
         req.set(http::field::host, host_);
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-        req.set(http::field::content_type, "text/plain; charset=utf-8");
+        req.set(http::field::content_type, payload_type);
         if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
         if (cookie_.size()) req.set(http::field::cookie, cookie_);
         try {
@@ -147,4 +147,5 @@ namespace d3156
     }
 
     void EasyHttpClient::setBasePath(std::string basePath) { basePath_ = basePath; }
+    void EasyHttpClient::setContentType(std::string payload) { payload_type = payload; }
 }

@@ -25,15 +25,20 @@ namespace d3156
         resp_dynamic_body send(beast::http::request<beast::http::string_body> req,
                                std::chrono::milliseconds timeout = std::chrono::milliseconds{0});
 
-        resp_dynamic_body post(std::string path, std::string body, std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
-        
-        resp_dynamic_body get(std::string path, std::string body, std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
+        resp_dynamic_body post(std::string path, std::string body,
+                               std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
+
+        resp_dynamic_body get(std::string path, std::string body,
+                              std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
 
         void setBasePath(std::string basePath);
+
+        void setContentType(std::string payload);
 
         ~EasyHttpClient();
 
     private:
+        std::string payload_type = "text/plain; charset=utf-8";
         bool reconnect();
         std::string token_;
         std::string cookie_;
