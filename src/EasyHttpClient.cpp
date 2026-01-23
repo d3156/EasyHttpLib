@@ -4,11 +4,11 @@
 #include <boost/beast/version.hpp>
 #include <exception>
 #include <iostream>
+#define LOG(args) std::cout << "[EasyHttpClient " << host_ << "] " << args << std::endl
 
 namespace d3156
 {
 
-#define LOG(args) std::cout << "[EasyHttpClient " << host_ << "] " << args << std::endl
     namespace beast = boost::beast;
     namespace http  = beast::http;
     namespace net   = boost::asio;
@@ -98,7 +98,7 @@ namespace d3156
     http::response<http::dynamic_body> EasyHttpClient::send(std::string target, std::string body, http::verb type,
                                                             std::chrono::milliseconds timeout)
     {
-        boost::beast::http::request<boost::beast::http::string_body> req{type, target, 11};
+        boost::beast::http::request<boost::beast::http::string_body> req{type, basePath_ + target, 11};
         req.body() = body;
         req.set(http::field::host, host_);
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
@@ -124,5 +124,20 @@ namespace d3156
         }
         return {};
     }
+    
+    resp_dynamic_body EasyHttpClient::post(std::string path, std::string body, std::chrono::milliseconds timeout)
+    {
+        req_string_body r{http::verb::post, basePath_ + path, 11};
+        r.body() = body;
+        return send(r, timeout);
+    }
 
+    resp_dynamic_body EasyHttpClient::get(std::string path, std::string body, std::chrono::milliseconds timeout)
+    {
+        req_string_body r{http::verb::get, basePath_ + path, 11};
+        r.body() = body;
+        return send(r, timeout);
+    }
+
+    void EasyHttpClient::setBasePath(std::string basePath) { basePath_ = basePath; }
 }

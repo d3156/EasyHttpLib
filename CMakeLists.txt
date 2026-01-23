@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(EasyHttpLib LANGUAGES CXX)
+project(EasyHttpLib
+  VERSION 1.0.1
+  LANGUAGES CXX
+)
+add_compile_definitions(EasyHttpLib_VERSION="${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
