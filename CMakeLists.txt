@@ -4,7 +4,6 @@ project(EasyHttpLib
   LANGUAGES CXX
 )
 add_compile_definitions(EasyHttpLib_VERSION="${PROJECT_VERSION}")
-add_compile_definitions(LOG_NAME="EasyHttp")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +22,7 @@ target_include_directories(EasyHttpLib
   PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+target_compile_definitions(EasyHttpLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:LOG_NAME="EasyHttp">)
 
 # ### BOOST ####
 set(Boost_USE_STATIC_LIBS ON)
