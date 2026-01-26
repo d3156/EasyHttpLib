@@ -105,7 +105,7 @@ namespace d3156
             if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
             if (cookie_.size()) req.set(http::field::cookie, cookie_);
             req.prepare_payload();
-
+            LOG(5, "Send request: " << req);
             if (use_ssl_) {
                 stream_->next_layer().expires_after(timeout);
                 http::write(*stream_, req);
@@ -121,6 +121,7 @@ namespace d3156
                 http::read(*stream_, buffer, res);
             else
                 http::read(*tcp_stream_, buffer, res);
+            LOG(5, "Answer: " << res);
             return res;
         } catch (const std::exception &e) {
             R_LOG(1, "Request to " << req.target() << " failed.");
@@ -159,7 +160,7 @@ namespace d3156
                 http::read(*stream_, buffer, res);
             else
                 http::read(*tcp_stream_, buffer, res);
-            LOG(5, "Answer: " << req);
+            LOG(5, "Answer: " << res);
             return res;
         } catch (const std::exception &e) {
             R_LOG(1, "Request to " << req.target() << " failed.");
