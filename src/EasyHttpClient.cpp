@@ -6,6 +6,9 @@
 #include <string>
 #include <PluginCore/Logger/Log.hpp>
 
+#undef LOG_NAME
+#define LOG_NAME "EasyHttpClient " + host_clean_
+
 namespace d3156
 {
 

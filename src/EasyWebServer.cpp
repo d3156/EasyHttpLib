@@ -2,7 +2,7 @@
 #include <PluginCore/Logger/Log.hpp>
 
 #undef LOG_NAME
-#define LOG_NAME "WebhookServer"
+#define LOG_NAME "EasyWebServer " + std::to_string(port)
 
 namespace d3156
 {
