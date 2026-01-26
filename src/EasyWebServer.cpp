@@ -1,5 +1,8 @@
 #include "EasyWebServer.hpp"
-#include <iostream>
+#include <PluginCore/Logger/Log.hpp>
+
+#undef LOG_NAME
+#define LOG_NAME "WebhookServer"
 
 namespace d3156
 {
@@ -39,7 +42,11 @@ namespace d3156
         auto res      = handler->second(req, socket->remote_endpoint().address());
         auto response = std::make_shared<http::response<http::string_body>>(
             res.first ? http::status::ok : http::status::forbidden, req.version());
-        if (!res.first) std::cout << "[WebhookServer] Bad Request " << req << "\n\n[WebhookServer] What:" << res.second;
+        if (!res.first)
+        { 
+            R_LOG(1, "Bad Request " << req);
+            R_LOG(1, " What:" << res.second);
+        }
         response->set(http::field::content_type, "text/plain");
         // response->set(http::field::content_type, "text/html; charset=utf-8");
         response->body() = res.first ? res.second : "Bad Request";
@@ -49,7 +56,7 @@ namespace d3156
             beast::error_code ec;
             ec = socket->shutdown(tcp::socket::shutdown_send, ec);
             if (ec && ec != boost::asio::error::not_connected)
-                std::cout << "[WebhookServer] Error on close Session" << ec;
+            R_LOG(1,  "[WebhookServer] Error on close Session" << ec);
             ec = socket->close(ec);
         });
     }

@@ -3,9 +3,8 @@
 #include <boost/beast/http/impl/write.hpp>
 #include <boost/beast/version.hpp>
 #include <exception>
-#include <iostream>
 #include <string>
-#define LOG(args) std::cout << "[EasyHttpClient " << host_clean_ << "] " << args << std::endl
+#include <PluginCore/Logger/Log.hpp>
 
 namespace d3156
 {
@@ -44,10 +43,10 @@ namespace d3156
         if (!runing) return false;
         if (use_ssl_) {
             if (stream_) {
-                LOG("Reconnecting SSL session");
+                LOG(1, "Reconnecting SSL session");
                 beast::error_code ec;
                 stream_.reset();
-                if (ec != net::error::eof && ec) { LOG("On close error: " << ec.to_string()); }
+                if (ec != net::error::eof && ec) { R_LOG(1, "On close error: " << ec.to_string()); }
             }
             try {
                 stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(io_, ssl_ctx_);
@@ -58,13 +57,13 @@ namespace d3156
                 if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_clean_.c_str())) {
                     beast::system_error er{
                         beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category())};
-                    LOG("SSL_set_tlsext_host_name error: " << er.what());
+                    R_LOG(1, "SSL_set_tlsext_host_name error: " << er.what());
                     return false;
                 }
                 stream_->handshake(ssl::stream_base::client);
-                LOG("Сonnected with new SSL session");
+                G_LOG(1, "Сonnected with new SSL session");
             } catch (std::exception &e) {
-                LOG("Error: " << e.what() << " with service " << service << " to host " << host_clean_);
+                R_LOG(1, "Error: " << e.what() << " with service " << service << " to host " << host_clean_);
                 return false;
             }
 
@@ -76,9 +75,9 @@ namespace d3156
             tcp::resolver resolver(io_);
             tcp_stream_->connect(resolver.resolve(host_clean_, service));
             tcp_stream_->expires_after(std::chrono::seconds(30));
-            LOG("Connected HTTP");
+            G_LOG(1, "Connected HTTP");
         } catch (std::exception &e) {
-            LOG("Error: " << e.what() << " with service " << service << " to host " << host_clean_);
+            R_LOG(1, "Error: " << e.what() << " with service " << service << " to host " << host_clean_);
             return false;
         }
         return true;
@@ -90,9 +89,9 @@ namespace d3156
         beast::error_code ec;
         if (stream_) stream_->shutdown(ec);
         if (ec != net::error::eof)
-            LOG("Close socket error: " << ec.to_string());
+            R_LOG(1, "Close socket error: " << ec.to_string());
         else
-            LOG("Closed session");
+            G_LOG(1, "Closed session");
     }
 
     http::response<http::dynamic_body> EasyHttpClient::send(http::request<http::string_body> req,
@@ -124,8 +123,8 @@ namespace d3156
                 http::read(*tcp_stream_, buffer, res);
             return res;
         } catch (const std::exception &e) {
-            LOG("Request to " << req.target() << " failed.");
-            LOG("Request error: " << e.what());
+            R_LOG(1, "Request to " << req.target() << " failed.");
+            R_LOG(1, "Request error: " << e.what());
             reconnect();
         }
         return {};
@@ -144,6 +143,7 @@ namespace d3156
         try {
             // Construct request
             req.prepare_payload();
+            LOG(5, "Send request: " << req);
             if (use_ssl_) {
                 stream_->next_layer().expires_after(timeout);
                 http::write(*stream_, req);
@@ -159,10 +159,11 @@ namespace d3156
                 http::read(*stream_, buffer, res);
             else
                 http::read(*tcp_stream_, buffer, res);
+            LOG(5, "Answer: " << req);
             return res;
         } catch (const std::exception &e) {
-            LOG("Request to " << req.target() << " failed.");
-            LOG("Request error: " << e.what());
+            R_LOG(1, "Request to " << req.target() << " failed.");
+            R_LOG(1, "Request error: " << e.what());
             reconnect();
         }
         return {};

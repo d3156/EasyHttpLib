@@ -4,6 +4,7 @@ project(EasyHttpLib
   LANGUAGES CXX
 )
 add_compile_definitions(EasyHttpLib_VERSION="${PROJECT_VERSION}")
+add_compile_definitions(LOG_NAME="EasyHttp")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
