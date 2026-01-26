@@ -7,7 +7,7 @@
 #include <PluginCore/Logger/Log.hpp>
 
 #undef LOG_NAME
-#define LOG_NAME "EasyHttpClient " + host_clean_
+#define LOG_NAME ("EasyHttpClient " + host_clean_).c_str()
 
 namespace d3156
 {

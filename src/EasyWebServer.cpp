@@ -2,12 +2,12 @@
 #include <PluginCore/Logger/Log.hpp>
 
 #undef LOG_NAME
-#define LOG_NAME "EasyWebServer " + std::to_string(port)
+#define LOG_NAME ("EasyWebServer " + std::to_string(port_)).c_str()
 
 namespace d3156
 {
     EasyWebServer::EasyWebServer(asio::io_context &io, unsigned short port)
-        : io_(io), acceptor_(io, tcp::endpoint(tcp::v4(), port))
+        : io_(io), acceptor_(io, tcp::endpoint(tcp::v4(), port)), port_(port)
     {
         accept();
     }
@@ -52,11 +52,11 @@ namespace d3156
         response->body() = res.first ? res.second : "Bad Request";
         response->prepare_payload();
         response->keep_alive(false);
-        http::async_write(*socket, *response, [socket, response](beast::error_code, std::size_t) {
+        http::async_write(*socket, *response, [this, socket, response](beast::error_code, std::size_t) {
             beast::error_code ec;
             ec = socket->shutdown(tcp::socket::shutdown_send, ec);
             if (ec && ec != boost::asio::error::not_connected)
-            R_LOG(1,  "[WebhookServer] Error on close Session" << ec);
+            R_LOG(1,  " Error on close Session" << ec);
             ec = socket->close(ec);
         });
     }

@@ -35,6 +35,7 @@ namespace d3156
         void process_request(std::shared_ptr<tcp::socket> socket, const http::request<http::string_body> &req);
 
     private:
+        unsigned short port_;
         std::unordered_map<std::string, RequestHandler> handlers_;
         asio::io_context &io_;
         tcp::acceptor acceptor_;
