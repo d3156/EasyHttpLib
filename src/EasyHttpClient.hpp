@@ -17,7 +17,7 @@ namespace d3156
 
     public:
         EasyHttpClient(asio::io_context &ioc, const std::string &host, const std::string &cookie = "",
-                       const std::string &token = "");
+                       const std::string &authorization = "");
 
         resp_dynamic_body send(std::string target, std::string body, beast::http::verb type = beast::http::verb::post,
                                std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
@@ -41,7 +41,7 @@ namespace d3156
         bool use_ssl_            = true;
         std::string payload_type = "text/plain; charset=utf-8";
         bool reconnect();
-        std::string token_;
+        std::string authorization_;
         std::string cookie_;
         std::unique_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
         std::unique_ptr<beast::tcp_stream> tcp_stream_;

@@ -7,7 +7,7 @@
 #include <PluginCore/Logger/Log.hpp>
 
 #undef LOG_NAME
-#define LOG_NAME ("EasyHttpClient " + host_clean_).c_str()
+#define LOG_NAME ("EasyHttpClient_" + host_clean_).c_str()
 
 namespace d3156
 {
@@ -20,8 +20,8 @@ namespace d3156
     using tcp = boost::asio::ip::tcp;
 
     EasyHttpClient::EasyHttpClient(net::io_context &ioc, const std::string &host, const std::string &cookie,
-                                   const std::string &token)
-        : token_(token), cookie_(cookie), io_(ioc), ssl_ctx_(ssl::context::tlsv13_client)
+                                   const std::string &authorization)
+        : authorization_(authorization), cookie_(cookie), io_(ioc), ssl_ctx_(ssl::context::tlsv13_client)
     {
         ssl_ctx_.set_default_verify_paths();
         host_clean_ = host;
@@ -105,7 +105,7 @@ namespace d3156
             req.set(http::field::host, host_clean_);
             req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
             req.set(http::field::content_type, payload_type);
-            if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
+            if (authorization_.size()) req.set(http::field::authorization, authorization_);
             if (cookie_.size()) req.set(http::field::cookie, cookie_);
             req.prepare_payload();
             LOG(5, "Send request: " << req);
@@ -142,7 +142,7 @@ namespace d3156
         req.set(http::field::host, host_clean_);
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.set(http::field::content_type, payload_type);
-        if (token_.size()) req.set(http::field::authorization, "Bearer " + token_);
+        if (authorization_.size()) req.set(http::field::authorization, authorization_);
         if (cookie_.size()) req.set(http::field::cookie, cookie_);
         try {
             // Construct request
