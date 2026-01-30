@@ -27,6 +27,8 @@ namespace d3156
 
         void stop();
 
+        void setContentType(std::string payload);
+
     private:
         void accept();
 
@@ -35,6 +37,7 @@ namespace d3156
         void process_request(std::shared_ptr<tcp::socket> socket, const http::request<http::string_body> &req);
 
     private:
+        std::string payload_type = "text/plain; charset=utf-8";
         unsigned short port_;
         std::unordered_map<std::string, RequestHandler> handlers_;
         asio::io_context &io_;

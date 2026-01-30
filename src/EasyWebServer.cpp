@@ -26,7 +26,6 @@ namespace d3156
     {
         auto buffer  = std::make_shared<beast::flat_buffer>();
         auto request = std::make_shared<http::request<http::string_body>>();
-
         http::async_read(*socket, *buffer, *request,
                          [this, socket, buffer, request](beast::error_code ec, std::size_t) {
                              if (!ec) { process_request(socket, *request); }
@@ -42,21 +41,18 @@ namespace d3156
         auto res      = handler->second(req, socket->remote_endpoint().address());
         auto response = std::make_shared<http::response<http::string_body>>(
             res.first ? http::status::ok : http::status::forbidden, req.version());
-        if (!res.first)
-        { 
+        if (!res.first) {
             R_LOG(1, "Bad Request " << req);
             R_LOG(1, " What:" << res.second);
         }
-        response->set(http::field::content_type, "text/plain");
-        // response->set(http::field::content_type, "text/html; charset=utf-8");
+        response->set(http::field::content_type,  payload_type);
         response->body() = res.first ? res.second : "Bad Request";
         response->prepare_payload();
         response->keep_alive(false);
         http::async_write(*socket, *response, [this, socket, response](beast::error_code, std::size_t) {
             beast::error_code ec;
             ec = socket->shutdown(tcp::socket::shutdown_send, ec);
-            if (ec && ec != boost::asio::error::not_connected)
-            R_LOG(1,  " Error on close Session" << ec);
+            if (ec && ec != boost::asio::error::not_connected) R_LOG(1, " Error on close Session" << ec);
             ec = socket->close(ec);
         });
     }
@@ -66,12 +62,9 @@ namespace d3156
     void EasyWebServer::stop()
     {
         is_running_ = false;
-
-        // Отменяем все ожидающие операции
         beast::error_code ec;
         ec = acceptor_.cancel(ec);
         ec = acceptor_.close(ec);
-
         handlers_.clear();
     }
 
@@ -79,4 +72,6 @@ namespace d3156
     {
         if (is_running_) stop();
     }
+
+    void EasyWebServer::setContentType(std::string payload) { payload_type = payload; }
 }
