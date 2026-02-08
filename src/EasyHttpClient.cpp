@@ -100,6 +100,7 @@ namespace d3156
     http::response<http::dynamic_body> EasyHttpClient::send(http::request<http::string_body> req,
                                                             std::chrono::milliseconds timeout)
     {
+        if (!isConnected()) reconnect();
         try {
             // Construct request
             req.set(http::field::host, host_clean_);
@@ -107,45 +108,6 @@ namespace d3156
             req.set(http::field::content_type, payload_type);
             if (authorization_.size()) req.set(http::field::authorization, authorization_);
             if (cookie_.size()) req.set(http::field::cookie, cookie_);
-            req.prepare_payload();
-            LOG(5, "Send request: " << req);
-            if (use_ssl_) {
-                stream_->next_layer().expires_after(timeout);
-                http::write(*stream_, req);
-            } else {
-                tcp_stream_->expires_after(timeout);
-                http::write(*tcp_stream_, req);
-            }
-
-            // Receive the response
-            beast::flat_buffer buffer;
-            http::response<http::dynamic_body> res;
-            if (use_ssl_)
-                http::read(*stream_, buffer, res);
-            else
-                http::read(*tcp_stream_, buffer, res);
-            LOG(5, "Answer: " << res);
-            return res;
-        } catch (const std::exception &e) {
-            R_LOG(1, "Request to " << req.target() << " failed.");
-            R_LOG(1, "Request error: " << e.what());
-            reconnect();
-        }
-        return {};
-    }
-
-    http::response<http::dynamic_body> EasyHttpClient::send(std::string target, std::string body, http::verb type,
-                                                            std::chrono::milliseconds timeout)
-    {
-        boost::beast::http::request<boost::beast::http::string_body> req{type, basePath_ + target, 11};
-        req.body() = body;
-        req.set(http::field::host, host_clean_);
-        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-        req.set(http::field::content_type, payload_type);
-        if (authorization_.size()) req.set(http::field::authorization, authorization_);
-        if (cookie_.size()) req.set(http::field::cookie, cookie_);
-        try {
-            // Construct request
             req.prepare_payload();
             LOG(5, "Send request: " << req);
             if (use_ssl_) {
@@ -190,4 +152,9 @@ namespace d3156
     void EasyHttpClient::setBasePath(std::string basePath) { basePath_ = basePath; }
 
     void EasyHttpClient::setContentType(std::string payload) { payload_type = payload; }
+
+    bool EasyHttpClient::isConnected() {
+        if (use_ssl_) return stream_->next_layer().socket().is_open();
+        return tcp_stream_->socket().is_open();
+    }
 }

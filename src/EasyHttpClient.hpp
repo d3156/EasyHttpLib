@@ -19,9 +19,6 @@ namespace d3156
         EasyHttpClient(asio::io_context &ioc, const std::string &host, const std::string &cookie = "",
                        const std::string &authorization = "");
 
-        resp_dynamic_body send(std::string target, std::string body, beast::http::verb type = beast::http::verb::post,
-                               std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
-
         resp_dynamic_body send(beast::http::request<beast::http::string_body> req,
                                std::chrono::milliseconds timeout = std::chrono::milliseconds{0});
 
@@ -34,6 +31,8 @@ namespace d3156
         void setBasePath(std::string basePath);
 
         void setContentType(std::string payload);
+
+        bool isConnected();
 
         ~EasyHttpClient();
 
