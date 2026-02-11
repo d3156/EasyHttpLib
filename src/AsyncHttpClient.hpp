@@ -55,6 +55,7 @@ private:
     std::string service_;
     net::io_context& ioc_;
     bool running_ = true;
+    bool inited = false;
     std::string basePath_;
     net::awaitable<bool> reconnectAsync();   
 };

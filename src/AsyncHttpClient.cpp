@@ -138,6 +138,10 @@ namespace d3156
 
     net::awaitable<bool> AsyncHttpClient::ensureConnected()
     {
+        if (!inited) {
+            inited = true;
+            co_return co_await reconnectAsync();
+        }
         if (isConnected()) co_return true;
         R_LOG(0, "Stream was closed");
         co_return co_await reconnectAsync();
