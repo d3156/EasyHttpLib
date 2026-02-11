@@ -128,6 +128,14 @@ namespace d3156
         co_return co_await sendAsync(std::move(r), timeout);
     }
 
+    net::awaitable<resp_dynamic_body> AsyncHttpClient::patchAsync(std::string path, std::string body,
+                                                                  std::chrono::milliseconds timeout)
+    {
+        req_string_body r{http::verb::patch, basePath_ + path, 11};
+        r.body() = std::move(body);
+        co_return co_await sendAsync(std::move(r), timeout);
+    }
+
     net::awaitable<bool> AsyncHttpClient::ensureConnected()
     {
         if (isConnected()) co_return true;

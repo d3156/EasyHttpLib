@@ -30,6 +30,9 @@ public:
     net::awaitable<resp_dynamic_body> getAsync(std::string path, std::string body,
         std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
 
+    net::awaitable<resp_dynamic_body> patchAsync(std::string path, std::string body,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds{500});
+
     void setBasePath(std::string basePath);
     void setContentType(std::string payload);
     
