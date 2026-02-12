@@ -46,7 +46,7 @@ namespace d3156
             R_LOG(1, " What:" << res.second);
         }
         response->set(http::field::content_type,  payload_type);
-        response->body() = res.first ? res.second : "Bad Request";
+        response->body() = res.first ? res.second : res.second;
         response->prepare_payload();
         response->keep_alive(false);
         http::async_write(*socket, *response, [this, socket, response](beast::error_code, std::size_t) {
