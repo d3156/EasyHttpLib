@@ -7,17 +7,18 @@
 
 namespace d3156
 {
-    namespace asio  = boost::asio;
-    namespace beast = boost::beast;
-    namespace http  = beast::http;
-    using tcp       = asio::ip::tcp;
-    using address   = asio::ip::address;
+    namespace asio   = boost::asio;
+    namespace beast  = boost::beast;
+    namespace http   = beast::http;
+    using tcp        = asio::ip::tcp;
+    using address    = asio::ip::address;
+    using Answer     = std::pair<bool, std::string>;
+    using string_req = http::request<http::string_body>;
 
     class EasyWebServer
     {
     public:
-        using RequestHandler = std::function<std::pair<bool, std::string>(const http::request<http::string_body> &,
-                                                                          const address &client_ip)>;
+        using RequestHandler = std::function<Answer(const string_req &, const address &client_ip)>;
         ~EasyWebServer();
 
         EasyWebServer(asio::io_context &io, unsigned short port);
