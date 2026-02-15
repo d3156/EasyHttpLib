@@ -1,7 +1,7 @@
 #include "AsyncHttpClient.hpp"
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/beast/version.hpp>
-#include <PluginCore/Logger/Log.hpp>
+#include <PluginCore/Logger/Log>
 
 #undef LOG_NAME
 #define LOG_NAME ("AsyncHttpClient_" + host_clean_).c_str()

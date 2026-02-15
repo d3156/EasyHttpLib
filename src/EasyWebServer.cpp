@@ -1,5 +1,5 @@
 #include "EasyWebServer.hpp"
-#include <PluginCore/Logger/Log.hpp>
+#include <PluginCore/Logger/Log>
 
 #undef LOG_NAME
 #define LOG_NAME ("EasyWebServer " + std::to_string(port_)).c_str()
