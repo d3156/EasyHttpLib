@@ -57,7 +57,10 @@ namespace d3156
         });
     }
 
-    void EasyWebServer::addPath(std::string path, RequestHandler handler) { handlers_[path] = handler; }
+    void EasyWebServer::addPath(std::string path, RequestHandler handler) { 
+        G_LOG(1, "Add server path " << "http://0.0.0.0:" << port_ << path);
+        handlers_[path] = handler; 
+    }
 
     void EasyWebServer::stop()
     {
