@@ -2,6 +2,10 @@
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/beast/version.hpp>
 #include <PluginCore/Logger/Log>
+#include <boost/url/parse.hpp>
+#include <chrono>
+#include <exception>
+#include <src/Logger/Log.hpp>
 
 #undef LOG_NAME
 #define LOG_NAME ("AsyncHttpClient_" + host_clean_).c_str()
@@ -11,7 +15,8 @@ namespace d3156
 
     AsyncHttpClient::AsyncHttpClient(net::io_context &ioc, const std::string &host, const std::string &cookie,
                                      const std::string &authorization, size_t max_async_send)
-        : authorization_(authorization), cookie_(cookie), ioc_(ioc), ssl_ctx_(ssl::context::tlsv13_client), max_queued_senders(max_async_send)
+        : authorization_(authorization), cookie_(cookie), ioc_(ioc), ssl_ctx_(ssl::context::tlsv13_client),
+          max_queued_senders(max_async_send)
     {
         ssl_ctx_.set_default_verify_paths();
         host_clean_ = host;
@@ -114,7 +119,7 @@ namespace d3156
             co_return res;
         } catch (const std::exception &e) {
             R_LOG(1, "Async request failed " << req.target() << ": " << e.what());
-            busy_ = false;
+            busy_             = false;
             is_http_connected = false;
             if (retry == 0) co_return resp_dynamic_body{http::status::bad_request, 11};
         }
@@ -189,6 +194,102 @@ namespace d3156
     {
         running_ = false;
         G_LOG(1, "AsyncHttpClient destroyed");
+    }
+
+    namespace http = beast::http;
+
+    static bool is_redirect(unsigned c) { return c == 301 || c == 302 || c == 307 || c == 308 || c == 303; }
+
+    static std::string make_absolute_url(boost::urls::url_view base, std::string_view loc)
+    {
+        if (!loc.empty() && loc.front() == '/')
+            return std::string(base.scheme()) + "://" + std::string(base.host()) +
+                   (base.has_port() ? ":" + std::string(base.port()) : "") + std::string(loc);
+        return std::string(loc);
+    }
+
+#define LOG_NAME ("AsyncHttpClient::wget(" + url + ")").c_str()
+    net::awaitable<bool> AsyncHttpClient::wget(net::io_context &ioc, std::string url, std::string target_path,
+                                               std::string authorization, std::string cookie, int max_redirects,
+                                               std::chrono::seconds timeout)
+    {
+
+        std::unique_ptr<AsyncHttpClient> cli;
+        for (int hop = 0; hop <= max_redirects; ++hop) {
+            auto r = boost::urls::parse_uri(url);
+            if (!r) co_return false;
+            boost::urls::url_view u = r.value();
+            if (u.scheme() != "https" && u.scheme() != "http") {
+                R_LOG(1, "Unsupported scheme:" << u.scheme());
+                co_return false;
+            }
+            if (u.host().empty()) {
+                R_LOG(1, "Host was empty:" << u.scheme());
+                co_return false;
+            }
+            std::string origin = std::string(u.encoded_origin());
+            std::string target = std::string(u.encoded_target());
+            if (target.empty()) target = std::string("/");
+            if (!cli) {
+                cli = std::make_unique<AsyncHttpClient>(ioc, origin, cookie, authorization);
+            } else {
+                if (cli->host_clean_ != u.host() || (cli->use_ssl_ && u.scheme() != "https") ||
+                    (!cli->use_ssl_ && u.scheme() != "http") ||
+                    cli->service_ != (u.has_port() ? u.port() : (u.scheme() == "https" ? "443" : "80"))) {
+                    co_await cli->disconnect();
+                    if (cli->host_clean_ != u.host()) authorization = "";
+                    cli = std::make_unique<AsyncHttpClient>(ioc, origin, cookie, authorization);
+                }
+            }
+            if (!co_await cli->ensureConnected()) co_return false;
+            http::request<http::empty_body> req{http::verb::get, target, 11};
+            req.set(http::field::host, cli->host_clean_);
+            req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+            if (!authorization.empty()) req.set(http::field::authorization, authorization);
+            if (!cookie.empty()) req.set(http::field::cookie, cookie);
+            beast::flat_buffer buffer;
+            http::response_parser<http::file_body> parser;
+            try {
+                if (cli->use_ssl_) {
+                    cli->stream_->next_layer().expires_after(timeout);
+                    co_await http::async_write(*cli->stream_, req, net::use_awaitable);
+                    co_await http::async_read_header(*cli->stream_, buffer, parser, net::use_awaitable);
+                } else {
+                    cli->tcp_stream_->expires_after(timeout);
+                    co_await http::async_write(*cli->tcp_stream_, req, net::use_awaitable);
+                    co_await http::async_read_header(*cli->tcp_stream_, buffer, parser, net::use_awaitable);
+                }
+            } catch (std::exception &e) {
+                R_LOG(1, "Error on wget file " << e.what());
+                co_return false;
+            }
+            unsigned code = parser.get().result_int();
+            if (is_redirect(code)) {
+                auto it = parser.get().base().find(http::field::location);
+                if (it == parser.get().base().end()) co_return false;
+                std::string loc = std::string(it->value());
+                url             = make_absolute_url(u, loc);
+                continue;
+            }
+            if (code != 200) {
+                R_LOG(1, "Recv not 200 code " << parser.get().base());
+                co_return false;
+            }
+            beast::error_code ec;
+            parser.get().body().open(target_path.c_str(), beast::file_mode::write, ec);
+            if (ec) co_return false;
+            try {
+                if (cli->use_ssl_)
+                    co_await http::async_read(*cli->stream_, buffer, parser, net::use_awaitable);
+                else
+                    co_await http::async_read(*cli->tcp_stream_, buffer, parser, net::use_awaitable);
+            } catch (std::exception &e) {
+                R_LOG(1, "Error on wget file " << e.what());
+                co_return false;
+            }
+            co_return true;
+        }
+        co_return false;
     }
 
 } // namespace d3156

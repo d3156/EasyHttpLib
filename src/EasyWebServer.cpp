@@ -26,26 +26,31 @@ namespace d3156
     {
         auto buffer  = std::make_shared<beast::flat_buffer>();
         auto request = std::make_shared<http::request<http::string_body>>();
-        http::async_read(*socket, *buffer, *request,
-                         [this, socket, buffer, request](beast::error_code ec, std::size_t) {
-                             if (!ec) { process_request(socket, *request); }
-                         });
+        http::async_read(
+            *socket, *buffer, *request, [this, socket, buffer, request](beast::error_code ec, std::size_t) {
+                if (!ec) boost::asio::co_spawn(io_, this->process_request(socket, request), boost::asio::detached);
+            });
     }
 
-    void EasyWebServer::process_request(std::shared_ptr<tcp::socket> socket,
-                                        const http::request<http::string_body> &req)
+    boost::asio::awaitable<void> EasyWebServer::process_request(std::shared_ptr<tcp::socket> socket,
+                                                                std::shared_ptr<http::request<http::string_body>> req)
     {
-        if (req.target().size() > 1000) return;
-        auto handler = handlers_.find(req.target());
-        if (handler == handlers_.end()) return;
-        auto res      = handler->second(req, socket->remote_endpoint().address());
+        if (req->target().size() > 1000) co_return;
+        auto handler      = handlers_.find(req->target());
+        auto handlerAsync = asyncHandlers_.find(req->target());
+        if (handler == handlers_.end() && handlerAsync == asyncHandlers_.end()) co_return;
+        Answer res;
+        if (handlerAsync != asyncHandlers_.end())
+            res = co_await handlerAsync->second(*req, socket->remote_endpoint().address());
+        else if (handler != handlers_.end())
+            res = handler->second(*req, socket->remote_endpoint().address());
         auto response = std::make_shared<http::response<http::string_body>>(
-            res.first ? http::status::ok : http::status::forbidden, req.version());
+            res.first ? http::status::ok : http::status::forbidden, req->version());
         if (!res.first) {
-            R_LOG(1, "Bad Request " << req);
+            R_LOG(1, "Bad Request " << *req);
             R_LOG(1, " What:" << res.second);
         }
-        response->set(http::field::content_type,  payload_type);
+        response->set(http::field::content_type, payload_type);
         response->body() = res.first ? res.second : res.second;
         response->prepare_payload();
         response->keep_alive(false);
@@ -57,9 +62,16 @@ namespace d3156
         });
     }
 
-    void EasyWebServer::addPath(std::string path, RequestHandler handler) { 
+    void EasyWebServer::addPath(std::string path, RequestHandlerAsync handler)
+    {
         G_LOG(1, "Add server path " << "http://0.0.0.0:" << port_ << path);
-        handlers_[path] = handler; 
+        asyncHandlers_[path] = handler;
+    }
+
+    void EasyWebServer::addPath(std::string path, RequestHandler handler)
+    {
+        G_LOG(1, "Add server path " << "http://0.0.0.0:" << port_ << path);
+        handlers_[path] = handler;
     }
 
     void EasyWebServer::stop()

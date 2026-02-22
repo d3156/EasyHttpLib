@@ -43,6 +43,10 @@ namespace d3156
 
         bool isConnected();
 
+        static net::awaitable<bool> wget(net::io_context &ioc, std::string url, std::string target_path,
+                                         std::string authorization = "", std::string cookie = "", int max_redirects = 5,
+                                         std::chrono::seconds timeout = std::chrono::seconds{30});
+
         ~AsyncHttpClient();
 
     private:
@@ -53,17 +57,17 @@ namespace d3156
         std::atomic<bool> busy_            = false;
         bool use_ssl_                      = true;
         std::string payload_type_          = "text/plain; charset=utf-8";
-        std::string authorization_;
-        std::string cookie_;
+        std::string authorization_         = "";
+        std::string cookie_                = "";
         std::unique_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
         std::unique_ptr<beast::tcp_stream> tcp_stream_;
         ssl::context ssl_ctx_;
-        std::string host_clean_;
-        std::string service_;
+        std::string host_clean_ = "";
+        std::string service_    = "";
         net::io_context &ioc_;
-        bool running_ = true;
-        bool inited   = false;
-        std::string basePath_;
+        bool running_         = true;
+        bool inited           = false;
+        std::string basePath_ = "";
         net::awaitable<bool> reconnectAsync();
     };
 

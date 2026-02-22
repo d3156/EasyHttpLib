@@ -6,5 +6,5 @@ create_target(library)
 find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
 target_link_libraries(EasyHttpLib PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 
-find_package(Boost 1.8 REQUIRED COMPONENTS system thread)
-target_link_libraries(EasyHttpLib PUBLIC Boost::system Boost::thread)
+find_package(Boost 1.8 REQUIRED COMPONENTS system thread url)
+target_link_libraries(EasyHttpLib PUBLIC Boost::system Boost::thread Boost::url)
