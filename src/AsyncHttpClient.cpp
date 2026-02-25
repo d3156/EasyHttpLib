@@ -234,82 +234,115 @@ namespace d3156
                                                std::string authorization, std::string cookie, int max_redirects,
                                                std::chrono::seconds timeout)
     {
-
+        G_LOG(1, "download file from " << url << " to " << target_path << " max_redirects=" << max_redirects
+                                       << " timeout_s=" << timeout.count());
         std::unique_ptr<AsyncHttpClient> cli;
         for (int hop = 0; hop <= max_redirects; ++hop) {
+            LOG(10, "wget() hop=" << hop << " url=" << url);
             auto r = boost::urls::parse_uri(url);
-            if (!r) co_return false;
+            if (!r) {
+                R_LOG(1, "parse_uri failed for url=" << url);
+                co_return false;
+            }
             boost::urls::url_view u = r.value();
+            LOG(10, "parsed scheme=" << u.scheme() << " host=" << u.host()
+                                     << " port=" << (u.has_port() ? u.port() : "(none)"));
             if (u.scheme() != "https" && u.scheme() != "http") {
-                R_LOG(1, "Unsupported scheme:" << u.scheme());
+                R_LOG(1, "Unsupported scheme: " << u.scheme());
                 co_return false;
             }
             if (u.host().empty()) {
-                R_LOG(1, "Host was empty:" << u.scheme());
+                R_LOG(1, "Host was empty for scheme: " << u.scheme());
                 co_return false;
             }
             std::string origin = std::string(u.encoded_origin());
             std::string target = std::string(u.encoded_target());
             if (target.empty()) target = std::string("/");
+            LOG(10, "origin=" << origin << " target=" << target);
             if (!cli) {
+                LOG(10, "creating new AsyncHttpClient for origin=" << origin);
                 cli = std::make_unique<AsyncHttpClient>(ioc, origin, cookie, authorization);
             } else {
                 if (cli->host_clean_ != u.host() || (cli->use_ssl_ && u.scheme() != "https") ||
                     (!cli->use_ssl_ && u.scheme() != "http") ||
                     cli->service_ != (u.has_port() ? u.port() : (u.scheme() == "https" ? "443" : "80"))) {
+                    G_LOG(5, "redirected to " << u);
                     co_await cli->disconnect();
-                    if (cli->host_clean_ != u.host()) authorization = "";
+                    if (cli->host_clean_ != u.host()) {
+                        LOG(5, "host changed, clearing authorization");
+                        authorization = "";
+                    }
                     cli = std::make_unique<AsyncHttpClient>(ioc, origin, cookie, authorization);
                 }
             }
-            if (!co_await cli->ensureConnected()) co_return false;
+            if (!co_await cli->ensureConnected()) {
+                R_LOG(1, "ensureConnected failed for origin=" << origin);
+                co_return false;
+            }
             http::request<http::empty_body> req{http::verb::get, target, 11};
             req.set(http::field::host, cli->host_clean_);
             req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
             if (!authorization.empty()) req.set(http::field::authorization, authorization);
             if (!cookie.empty()) req.set(http::field::cookie, cookie);
+            LOG(10, "sending request: " << req);
             beast::flat_buffer buffer;
             http::response_parser<http::file_body> parser;
             try {
                 if (cli->use_ssl_) {
+                    LOG(10, "async_write over SSL, timeout_s=" << timeout.count());
                     cli->stream_->next_layer().expires_after(timeout);
                     co_await http::async_write(*cli->stream_, req, net::use_awaitable);
+                    LOG(10, "async_read_header over SSL");
                     co_await http::async_read_header(*cli->stream_, buffer, parser, net::use_awaitable);
                 } else {
+                    LOG(10, "async_write over TCP, timeout_s=" << timeout.count());
                     cli->tcp_stream_->expires_after(timeout);
                     co_await http::async_write(*cli->tcp_stream_, req, net::use_awaitable);
+                    LOG(10, "async_read_header over TCP");
                     co_await http::async_read_header(*cli->tcp_stream_, buffer, parser, net::use_awaitable);
                 }
             } catch (std::exception &e) {
-                R_LOG(1, "Error on wget file " << e.what());
+                R_LOG(1, "Error on wget file header: " << e.what());
                 co_return false;
             }
             unsigned code = parser.get().result_int();
+            LOG(5, "response status=" << code);
             if (is_redirect(code)) {
                 auto it = parser.get().base().find(http::field::location);
-                if (it == parser.get().base().end()) co_return false;
+                if (it == parser.get().base().end()) {
+                    R_LOG(1, "redirect status " << code << " but no Location header");
+                    co_return false;
+                }
                 std::string loc = std::string(it->value());
-                url             = make_absolute_url(u, loc);
+                LOG(5, "redirect to Location=" << loc);
+                url = make_absolute_url(u, loc);
                 continue;
             }
             if (code != 200) {
-                R_LOG(1, "Recv not 200 code " << parser.get().base());
+                R_LOG(1, "non-200 response code=" << code << " headers=" << parser.get().base());
                 co_return false;
             }
             beast::error_code ec;
             parser.get().body().open(target_path.c_str(), beast::file_mode::write, ec);
-            if (ec) co_return false;
+            if (ec) {
+                R_LOG(1, "failed to open file '" << target_path << "' for write: " << ec.message());
+                co_return false;
+            }
+
             try {
+                LOG(10, "reading body to file...");
                 if (cli->use_ssl_)
                     co_await http::async_read(*cli->stream_, buffer, parser, net::use_awaitable);
                 else
                     co_await http::async_read(*cli->tcp_stream_, buffer, parser, net::use_awaitable);
             } catch (std::exception &e) {
-                R_LOG(1, "Error on wget file " << e.what());
+                R_LOG(1, "Error on wget file body: " << e.what());
                 co_return false;
             }
+            G_LOG(1, "successfully downloaded to " << target_path);
             co_return true;
         }
+        R_LOG(1, "max_redirects exceeded for url=" << url);
         co_return false;
     }
 

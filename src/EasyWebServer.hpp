@@ -27,13 +27,13 @@ namespace d3156
         EasyWebServer(asio::io_context &io, unsigned short port);
 
         /// Добавить обработчик запросов по заданному пути
-        void addPath(std::string path, RequestHandler handler);
+        void addPath(const std::string& path, RequestHandler handler);
 
-        void addPath(std::string path, RequestHandlerAsync handler);
+        void addPath(const std::string& path, RequestHandlerAsync handler);
 
         void stop();
 
-        void setContentType(std::string payload);
+        void setContentType(const std::string& payload);
 
     private:
         void accept();
