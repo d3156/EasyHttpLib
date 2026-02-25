@@ -33,27 +33,34 @@ namespace d3156
             service_    = host_clean_.substr(pos + 1);
             host_clean_ = host_clean_.substr(0, pos);
         }
+        LOG(1, "Created AsyncHttpClient with service " << service_ << " ssl using:" << use_ssl_);
     }
 
     net::awaitable<bool> AsyncHttpClient::reconnectAsync()
     {
         if (!running_) co_return false;
+        LOG(10, "Reconnecting client...");
         if (stream_) {
-            LOG(1, "Closing existing SSL stream");
+            LOG(10, "Closing existing SSL stream...");
             stream_.reset();
         }
         if (tcp_stream_) {
-            LOG(1, "Closing existing TCP stream");
+            LOG(10, "Closing existing TCP stream...");
             tcp_stream_.reset();
         }
         try {
+            LOG(10, "Try resolve peer...");
             tcp::resolver resolver(ioc_);
             auto results = co_await resolver.async_resolve({host_clean_, service_}, net::use_awaitable);
+            LOG(10, "Peer resolved as: " << results->endpoint());
             if (use_ssl_) {
+                LOG(10, "Try make ssl stream...");
                 stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(ioc_, ssl_ctx_);
                 stream_->set_verify_mode(ssl::verify_peer);
+                LOG(10, "Try connect ssl stream...");
                 co_await beast::get_lowest_layer(*stream_).async_connect(results, net::use_awaitable);
                 beast::get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
+                LOG(1, "Try set SNI to  ssl stream...");
                 if (!SSL_set_tlsext_host_name(stream_->native_handle(), host_clean_.c_str())) {
                     beast::system_error er{
                         beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category())};
@@ -61,11 +68,14 @@ namespace d3156
                     is_http_connected = false;
                     co_return false;
                 }
+                LOG(10, "Try ssl handshake stream...");
                 co_await stream_->async_handshake(ssl::stream_base::client, net::use_awaitable);
                 G_LOG(1, "Connected with new SSL session to " << host_clean_ << ":" << service_);
                 is_http_connected = true;
             } else {
+                LOG(10, "Try make tcp setream...");
                 tcp_stream_ = std::make_unique<beast::tcp_stream>(ioc_);
+                LOG(10, "Try connect tcp setream...");
                 co_await tcp_stream_->async_connect(results, net::use_awaitable);
                 tcp_stream_->expires_after(std::chrono::seconds(30));
                 G_LOG(1, "Connected HTTP to " << host_clean_ << ":" << service_);
@@ -82,22 +92,26 @@ namespace d3156
     net::awaitable<resp_dynamic_body> AsyncHttpClient::sendAsync(req_string_body req, size_t retry,
                                                                  std::chrono::milliseconds timeout)
     {
-        if (queued_senders >= max_queued_senders) co_return resp_dynamic_body{http::status::bad_request, 11};
+        if (queued_senders >= max_queued_senders) {
+            R_LOG(1, "Too many send operations queued in client! Req will be dropped!");
+            co_return resp_dynamic_body{http::status::bad_request, 11};
+        }
         ++queued_senders;
+        LOG(10, "Queued send with queue number" << queued_senders);
         size_t spins = 0, spin_max = timeout / std::chrono::milliseconds(10);
         while (busy_.exchange(true)) {
             if (++spins > spin_max) co_return resp_dynamic_body{http::status::bad_request, 11};
             co_await boost::asio::steady_timer(ioc_, std::chrono::milliseconds(10)).async_wait(net::use_awaitable);
         }
         --queued_senders;
-
+        LOG(10, "Make req...");
         req.set(http::field::host, host_clean_);
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.set(http::field::content_type, payload_type_);
         if (!authorization_.empty()) { req.set(http::field::authorization, authorization_); }
         if (!cookie_.empty()) { req.set(http::field::cookie, cookie_); }
         req.prepare_payload();
-        LOG(5, "Send async request: " << req);
+        LOG(10, "Send async request: " << req);
         if (!co_await ensureConnected()) {
             R_LOG(1, "Failed to ensure connection for async request");
             co_return resp_dynamic_body{http::status::bad_request, 11};
@@ -106,13 +120,19 @@ namespace d3156
             beast::flat_buffer buffer;
             resp_dynamic_body res;
             if (use_ssl_) {
+                LOG(10, "Send async over ssl stream...");
                 stream_->next_layer().expires_after(timeout);
                 co_await http::async_write(*stream_, req, net::use_awaitable);
+                LOG(10, "Wait async answer from ssl stream...");
                 co_await http::async_read(*stream_, buffer, res, net::use_awaitable);
+                LOG(10, "Aswer recvd: " << res);
             } else {
+                LOG(10, "Send async over tcp stream...");
                 tcp_stream_->expires_after(timeout);
                 co_await http::async_write(*tcp_stream_, req, net::use_awaitable);
+                LOG(10, "Wait async answer from tcp stream...");
                 co_await http::async_read(*tcp_stream_, buffer, res, net::use_awaitable);
+                LOG(10, "Aswer recvd: " << res);
             }
             LOG(5, "Async response: " << res.result_int());
             busy_ = false;
@@ -123,6 +143,7 @@ namespace d3156
             is_http_connected = false;
             if (retry == 0) co_return resp_dynamic_body{http::status::bad_request, 11};
         }
+        R_LOG(1, "Retry  sendAsync retry count expired:" << retry);
         co_return co_await sendAsync(req, --retry, timeout);
     }
 
@@ -157,7 +178,7 @@ namespace d3156
             co_return co_await reconnectAsync();
         }
         if (isConnected()) co_return true;
-        R_LOG(0, "Stream was closed");
+        R_LOG(1, "Stream was closed");
         co_return co_await reconnectAsync();
     }
 
